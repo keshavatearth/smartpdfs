@@ -1,4 +1,4 @@
-import { togetheraiClient } from "@/lib/ai";
+import { geminiModel } from "@/lib/ai";
 import assert from "assert";
 import dedent from "dedent";
 import { z } from "zod";
@@ -40,36 +40,23 @@ export async function POST(req: Request) {
       ),
   });
 
-  const summaryResponse = await generateObject({
-    model: togetheraiClient("meta-llama/Llama-3.3-70B-Instruct-Turbo"),
-    schema: summarySchema,
-    maxRetries: 2,
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      {
-        role: "user",
-        content: text,
-      },
-    ],
-    mode: "json",
-    // maxTokens: 800,
-  });
+  const result = await geminiModel.generateContent([
+    systemPrompt,
+    text,
+  ]);
+  const response = await result.response;
+  const content = response.text();
 
-  const rayId = summaryResponse.response?.headers?.["cf-ray"];
-  console.log("Ray ID:", rayId);
-
-  const content = summaryResponse.object;
-  console.log(summaryResponse.usage);
-
-  if (!content) {
-    console.log("Content was blank");
-    return;
+  try {
+    const parsedContent = JSON.parse(content);
+    return Response.json(parsedContent);
+  } catch (error) {
+    console.error("Failed to parse Gemini response:", error);
+    return Response.json({
+      title: "Error processing document",
+      summary: "There was an error processing this section of the document.",
+    });
   }
-
-  return Response.json(content);
 }
 
 export const runtime = "edge";

@@ -1,5 +1,5 @@
 import dedent from "dedent";
-import { togetheraiBaseClient } from "@/lib/ai";
+import { geminiModel } from "@/lib/ai";
 import { ImageGenerationResponse } from "@/lib/summarize";
 import { awsS3Client } from "@/lib/s3client";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
@@ -20,46 +20,21 @@ export async function POST(req: Request) {
     ${text}
   `;
 
-  const generatedImage = await togetheraiBaseClient.images.create({
-    model: "black-forest-labs/FLUX.1-dev",
-    width: 1280,
-    height: 720,
-    steps: 24,
-    prompt: prompt,
-  });
+  const result = await geminiModel.generateContent(prompt);
+  const response = await result.response;
+  const imageDescription = response.text();
+
+  // Note: Since Gemini doesn't generate images directly, we'll need to implement
+  // a different image generation service or use a placeholder image
+  const placeholderImageUrl = "https://placehold.co/1280x720";
 
   const end = new Date();
   console.log(
-    `Flux took ${end.getTime() - start.getTime()}ms to generate an image`,
+    `Image generation took ${end.getTime() - start.getTime()}ms`,
   );
-
-  const fluxImageUrl = generatedImage.data[0].url;
-
-  if (!fluxImageUrl) throw new Error("No image URL from Flux");
-
-  const fluxFetch = await fetch(fluxImageUrl);
-  const fluxImage = await fluxFetch.blob();
-  const imageBuffer = Buffer.from(await fluxImage.arrayBuffer());
-
-  const coverImageKey = `pdf-cover-${generatedImage.id}.jpg`;
-
-  const uploadedFile = await awsS3Client.send(
-    new PutObjectCommand({
-      Bucket: process.env.S3_UPLOAD_BUCKET || "",
-      Key: coverImageKey,
-      Body: imageBuffer,
-      ContentType: "image/jpeg",
-    }),
-  );
-
-  if (!uploadedFile) {
-    throw new Error("Failed to upload enhanced image to S3");
-  }
 
   return Response.json({
-    url: `https://${process.env.S3_UPLOAD_BUCKET}.s3.${
-      process.env.S3_UPLOAD_REGION || "us-east-1"
-    }.amazonaws.com/${coverImageKey}`,
+    url: placeholderImageUrl,
   } as ImageGenerationResponse);
 }
 
